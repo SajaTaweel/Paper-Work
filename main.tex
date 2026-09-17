@@ -1,0 +1,124 @@
+\documentclass{ieeeaccess}
+
+\usepackage{array}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{multirow}
+\usepackage[most]{tcolorbox}
+\usepackage{xcolor}
+
+\usepackage[most]{tcolorbox}
+\usepackage{multicol}
+\usetikzlibrary{positioning}
+
+\newenvironment{Algorithm}[1][tbh]%
+{\begin{myalgo}[#1]
+\centering
+\begin{minipage}{7.4cm}
+\begin{algorithm}[H]}%
+{\end{algorithm}
+\end{minipage}
+\end{myalgo}}
+
+
+  \NewSpotColorSpace{PANTONE}
+  \AddSpotColor{PANTONE} {PANTONE3015C} {PANTONE\SpotSpace 3015\SpotSpace C} {1 0.3 0 0.2}
+  \SetPageColorSpace{PANTONE}%
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\def\textsc#1{\textnormal{{\sc #1}}}%
+
+\begin{document}
+
+\title{\textsc{Daf-Cl}: A Robust Multimodal Emotion Classification Framework with Dynamic Adaptive Fusion and Contrastive Learning}
+
+% \author{\uppercase{Saja~Taweel}\authorrefmark{1}, \uppercase{Mohammad~J.~Abdel-Rahman}\authorrefmark{1}\IEEEmembership{Senior Member,~IEEE}, \uppercase{Noor Alawi}\authorrefmark{1}, \uppercase{Jude Daghlas}\authorrefmark{1}, and \uppercase{Ahmad Ghunaim}\authorrefmark{1}
+% }
+
+\author{\uppercase{}\authorrefmark{1},  \uppercase{}\authorrefmark{1}, and \uppercase{}\authorrefmark{1}
+}
+
+% \address[1]{Data Science Department, Princess Sumaya University for Technology, Amman 11941, Jordan}
+%\address[2]{Electrical and Computer Engineering Department, Virginia Tech, Blacksburg, VA 24061 USA}
+
+
+\markboth
+{S.~Taweel \headeretal: \textsc{DAF-CL}: A Robust Multimodal Emotion Classification Framework with Dynamic Audio-Text Fusion and Contrastive Learning}
+{S.~Taweel \headeretal: \textsc{DAF-CL}: A Robust Multimodal Emotion Classification Framework with Dynamic Audio-Text Fusion and Contrastive Learning}
+
+\corresp{Corresponding author:  (e-mail: ).}
+
+
+\begin{abstract}
+
+\end{abstract}
+
+
+\begin{keywords}
+
+\end{keywords}
+
+\titlepgskip=-15pt
+
+\maketitle
+\def\textsc#1{\textnormal{{\sc #1}}}%
+
+\section{Introduction}\label{sec:introduction}
+
+\input{Introduction.tex}
+
+\section{Related Work}\label{sec:related work}
+
+\input{Related Work}
+
+
+
+
+% \section{System Model and Problem Statement}\label{sec:system model and problem statement}
+
+% \input{System Model and Problem Statement}
+
+
+
+\section{\textsc{DAF-CL} Framework}\label{sec:Model 1}
+
+\input{Model}
+
+
+
+\section{Performance Evaluation}\label{sec:performance evaluation}
+
+\input{Performance Evaluation}
+
+\section{Limitations and Future Work}\label{sec: limitations}
+
+\input{Limitations & Future Work }
+
+\section{Conclusions}\label{sec:Conclusion}
+
+\input{conclusion}
+
+
+
+
+\bibliography{references}
+\bibliographystyle{IEEEtran}
+
+% \begin{IEEEbiographynophoto}{Saja R. Taweel} received her Bachelor's degree in Data Science and Artificial Intelligence from Princess Sumaya University for Technology, Amman, Jordan, in 2024. Her current research focuses on optimizing resource allocation and management in hospitals during pandemics. She is particularly interested in applying machine learning and predictive analytics to solve real-world challenges. 
+% \end{IEEEbiographynophoto}
+
+% \begin{IEEEbiography}
+
+
+% \end{IEEEbiography}
+
+
+
+
+
+\end{document}

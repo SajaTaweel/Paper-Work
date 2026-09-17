@@ -1,0 +1,231 @@
+In this section, we present the proposed \textbf{Dynamic Adaptive Fusion with Contrastive Learning (\textsc{Daf-Cl})} framework for multimodal emotion recognition. Given a multimodal utterance set denoted by ($\mathcal{D}$), the framework jointly models textual and acoustic information, represented as:
+
+\begin{equation}
+	\mathcal{D} = \{(t_i, u_i, y_i)\}_{i=1}^{N}
+\end{equation}
+
+where \(t_i\) and \(u_i\) denote the textual and
+speech utterances of the \(i^{th}\) sample,
+respectively, \(y_i\) represents the corresponding
+emotion label, and \(N\) is the total number of
+utterances in the dataset.
+
+The proposed \textsc{Daf-Cl} framework consists of three major components. First, a structured supervised contrastive learning module is applied to overlapping speech chunks to enhance intra-class compactness and inter-class separability within the acoustic representation space. Second, a dynamic confidence-aware audio-text fusion mechanism is introduced to adaptively integrate multimodal information according to the contextual reliability of each modality. Third, a cross-modal contrastive alignment module is employed to improve semantic consistency between speech and textual representations by aligning heterogeneous modality embeddings within a shared representation space.
+
+To jointly optimize these components, the framework is trained using a multi-objective learning strategy that combines supervised contrastive loss, cross-modal alignment loss, and emotion classification loss. The overall architecture is illustrated in Figure \ref{fig:model}. The following subsections describe each component in detail.
+\begin{figure*}
+	\centering
+	\includegraphics[width=1\linewidth]{"modeldevelop}
+	\caption{Framework development of the \textsc{Daf-Cl} model.}
+	\label{fig:model}
+\end{figure*}
+
+
+
+\subsection{Audio Representation Learning}
+Given an input speech utterance waveform $u_i$, we segment the signal into overlapping, fixed-length chunks to capture local emotional variations while maintaining a consistent input size for the downstream models. The main notations used throughout this subsection are summarized in Table \ref{tab:table0}.
+
+\begin{table}[ht]
+	\centering
+	\caption{Notation summary for audio representation learning}
+	\label{tab:table0}
+	\begin{tabular}{|p{0.18\columnwidth} | p{0.72\columnwidth}|}
+		\hline
+		\textbf{Notation} & \textbf{Description} \\
+		\hline
+		\hline
+		$M$ & Number of chunks per utterance \\
+		\hline
+		$c$ & Chunk duration in seconds \\
+		\hline
+		$f_s$ & Audio sampling rate \\
+		\hline
+		$\rho$ & Overlap ratio ($\rho \in [0, 1)$) \\
+		\hline
+		$\mathbf{X}_a^{(i,m)}$ & Extracted acoustic features for chunk $m$ of utterance $i$ \\
+		\hline
+		$L$ & Total number of WavLM Transformer layers \\
+		\hline
+		$\mathbf{H}_i^{(l, m)}$ & Hidden representation of chunk $m$ at layer $l$, $\mathbf{H}_i^{(l, m)} \in \mathbb{R}^{T_m \times d}$ \\
+		\hline
+		$T_m$ & Temporal frame length of chunk $m$ in the latent space \\ 
+		\hline
+		$d$ & Feature embedding dimension \\
+		\hline
+		$w_l$ & Trainable importance weight assigned to layer $l$ \\
+		\hline
+		$\omega_l$ & Softmax-normalized layer importance weight \\
+		\hline
+	\end{tabular}
+\end{table}
+
+The corresponding chunk length ($L_c$) and hop size ($L_h$) in terms of samples are defined as: 
+\begin{equation}
+	L_c = \lfloor c \cdot f_s \rfloor, \quad L_h = \lfloor L_c (1-\rho) \rfloor.
+\end{equation}
+
+The segmentation is performed using a sliding-window approach. The $m$-th chunk ($m \in \{1, \dots, M\}$) of the utterance waveform is extracted as:
+\begin{equation}
+	u_i^{(m)} = u_i[m L_h : m L_h + L_c].
+\end{equation}
+For utterances shorter than $L_c$, a single chunk is produced and zero-padded to match the fixed length $L_c$. For longer utterances, the window strides by $L_h$, and the final segment is padded if necessary. This strategy ensures fixed-length, overlap-aware acoustic segmentation.
+
+Each chunk $u_i^{(m)}$ is processed by a pretrained WavLM to extract hierarchical acoustic features across multiple Transformer layers. To preserve the general acoustic knowledge learned during self-supervised pretraining while adapting to downstream emotion dynamics, the lower layers of WavLM are frozen, whereas the higher layers are fine-tuned. 
+
+Unlike conventional approaches that rely solely on the final layer representation, the proposed framework introduces a trainable layer fusion mechanism to adaptively aggregate information across all $L$ layers. We define a vector of trainable layer weights:
+\begin{equation}
+	\mathbf{w} = [w_1, w_2, \dots, w_L],
+\end{equation}
+which are normalized via a softmax function to produce the layer-wise attention scores:
+\begin{equation}
+	\omega_l = \frac{\exp(w_l)}{\sum_{k=1}^{L}\exp(w_k)}.
+\end{equation}
+The layer-fused representation for chunk $m$ of utterance $i$ is then computed as:
+\begin{equation}
+	\mathbf{H}_{\text{fused}}^{(i,m)} = \sum_{l=1}^{L} \omega_l \mathbf{H}_i^{(l, m)}.
+\end{equation}
+This adaptive fusion mechanism enables the model to selectively emphasize specific Transformer layers that capture emotionally discriminative acoustic cues at different abstraction levels. 
+
+To model the localized temporal dependencies within each chunk, the fused representation is passed through a vanilla Transformer encoder layer:
+\begin{equation}
+	\widetilde{\mathbf{H}}^{(i,m)} = \text{TransformerEncoder}(\mathbf{H}_{\text{fused}}^{(i,m)}).
+\end{equation}
+The frame-level representations are subsequently aggregated into a fixed-dimensional chunk embedding $\mathbf{z}_i^{(m)} \in \mathbb{R}^d$ using mean pooling across the temporal dimension:
+\begin{equation}
+	\mathbf{z}_i^{(m)} = \frac{1}{T_m}\sum_{t=1}^{T_m}\widetilde{\mathbf{H}}_{t}^{(i,m)},
+\end{equation}
+where $\widetilde{\mathbf{H}}_{t}^{(i,m)}$ denotes the $t$-th temporal frame of the encoded chunk.
+
+Since different speech segments contribute unequally to the underlying emotional state, an adaptive reliability assessment mechanism is introduced. First, an emotional saliency score $\alpha_i^{(m)}$ is computed to estimate the emotional relevance of the chunk:
+\begin{equation}
+	\alpha_i^{(m)} = \sigma(\mathbf{W}_a \mathbf{z}_i^{(m)} + \mathbf{b}_a),
+\end{equation}
+where $\sigma(\cdot)$ is the sigmoid activation function, and $\mathbf{W}_a \in \mathbb{R}^{1 \times d}$ and $\mathbf{b}_a \in \mathbb{R}^1$ are learnable parameters.
+
+Each chunk embedding is passed through the audio classification head $f_{\text{audio}}(\cdot)$ to compute the chunk-level emotion prediction logits $\mathbf{\ell}_i^{(m)}$:
+\begin{equation}
+	\mathbf{\ell}_i^{(m)} = f_{\text{audio}}(\mathbf{z}_i^{(m)}).
+\end{equation}
+
+The model's local prediction confidence is defined using the maximum softmax probability over the predicted logits:
+\begin{equation}
+	c_i^{(m)} = \max_{k \in \mathcal{Y}} \text{softmax}(\mathbf{\ell}_i^{(m)})_k,
+\end{equation}
+where $\mathcal{Y}$ denotes the set of emotion classes. 
+
+The final chunk importance weight $\gamma_i^{(m)}$ scales its emotional saliency by its predictive confidence, acting as a gating mechanism for decision-level fusion:
+\begin{equation}
+	\gamma_i^{(m)} = \alpha_i^{(m)} \cdot c_i^{(m)}.
+\end{equation}
+
+Finally, the utterance-level decision vector $\mathbf{\ell}_i$ is achieved via a weight-normalized decision fusion step across all acoustic segments:
+\begin{equation}
+	\mathbf{\ell}_i^{\text{audio}} = \frac{\sum_{m=1}^{M} \gamma_i^{(m)} \mathbf{\ell}_i^{(m)}}{\sum_{m=1}^{M} \gamma_i^{(m)} + \epsilon},
+\end{equation}
+where $\epsilon > 0$ is a small constant preventing numerical instability. This decision-level fusion mechanism adaptively emphasizes predictions from emotionally clear speech regions while suppressing the influence of ambiguous or noisy chunks on the final utterance classification. 
+
+
+\subsection{Text Representation Learning}
+Given the text transcription associated with the $i$-th utterance, denoted by $t_i$, the framework leverages a pretrained RoBERTa encoder to capture semantic and contextual dependencies across the word tokens.
+
+Following standard practice in RoBERTa-based language models, the contextual hidden vector corresponding to the special start-of-sentence token ($\texttt{<s>}$) is adopted as the utterance-level textual embedding:
+\begin{equation}
+	\mathbf{z}_i^{\text{text}} = \mathbf{h}_{i,\texttt{<s>}}
+\end{equation}
+where $\mathbf{z}_i^{\text{text}} \in \mathbb{R}^{d_{\text{text}}}$ serves as the fixed-dimensional semantic summary of the transcription sequence.
+
+To obtain text-specific emotion predictions, this embedding is forwarded through a task-specific classification head $f_{\text{text}}(\cdot)$ consisting of fully connected layers, ReLU activation, and dropout regularization to produce the text emotion logits:
+\begin{equation}
+	\mathbf{\ell}_i^{\text{text}} = f_{\text{text}}\left(\mathbf{z}_i^{\text{text}}\right)
+\end{equation}
+where $\mathbf{\ell}_i^{\text{text}} \in \mathbb{R}^{C}$ represents the class probabilities over the $C$ target emotion classes. Both $\mathbf{z}_i^{\text{text}}$ and $\mathbf{\ell}_i^{\text{text}}$ serve as the core textual constituents for the subsequent cross-modal alignment and multimodal fusion stages.
+
+\subsection{Cross-Modal Alignment}
+Although the acoustic and textual representations are derived from the same utterance, they originate from heterogeneous feature spaces and often exhibit modality-specific structural discrepancies. To facilitate effective multimodal fusion, the two distinct representations are first projected into a shared latent space of uniform dimension $d$:
+\begin{equation}
+	\mathbf{v}_i^{\text{audio}} = f_a(\mathbf{z}_i), \qquad \mathbf{v}_i^{\text{text}} = f_t(\mathbf{z}_i^{\text{text}})
+\end{equation}
+where $f_a(\cdot)$ and $f_t(\cdot)$ denote learnable projection layers, while $\mathbf{v}_i^{\text{audio}}, \mathbf{v}_i^{\text{text}} \in \mathbb{R}^{d}$ represent the aligned audio and text embeddings of the $i$-th utterance, respectively. To ensure stable similarity calculations, these vectors are $L_2$-normalized such that $\|\mathbf{v}_i^{\text{audio}}\|_2 = \|\mathbf{v}_i^{\text{text}}\|_2 = 1$.
+
+To encourage semantic consistency across the modalities, a bidirectional contrastive learning objective is employed. For a mini-batch of size $N$, a pairwise similarity matrix $\mathbf{S} \in \mathbb{R}^{N \times N}$ is computed, where the entry $S_{ij}$ measures the scaled semantic proximity between the audio representation of utterance $i$ and the textual representation of utterance $j$:
+\begin{equation}
+	S_{ij} = \tau \cdot (\mathbf{v}_i^{\text{audio}})^{\top} \mathbf{v}_j^{\text{text}}
+\end{equation}
+where $\tau$ is a learnable temperature scaling parameter.
+
+The audio-to-text contrastive loss ($\mathcal{L}_{A \rightarrow T}$) for the mini-batch is formulated using the InfoNCE objective as:
+\begin{equation}
+	\mathcal{L}_{A \rightarrow T} = -\frac{1}{N} \sum_{i=1}^{N} \log \frac{\exp(S_{ii})}{\sum_{j=1}^{N} \exp(S_{ij})}
+\end{equation}
+Conversely, the text-to-audio contrastive loss ($\mathcal{L}_{T \rightarrow A}$) captures the symmetry of the alignment space and is defined as:
+\begin{equation}
+	\mathcal{L}_{T \rightarrow A} = -\frac{1}{N} \sum_{i=1}^{N} \log \frac{\exp(S_{ii})}{\sum_{j=1}^{N} \exp(S_{ji})}
+\end{equation}
+The overall cross-modal alignment objective is achieved by optimizing the joint bidirectional contrastive loss:
+\begin{equation}
+	\mathcal{L}_{\text{align}} = \frac{\mathcal{L}_{A \rightarrow T} + \mathcal{L}_{T \rightarrow A}}{2}
+\end{equation}
+
+By maximizing the similarity of true matched audio-text pairs ($S_{ii}$) while simultaneously minimizing the cross-modal similarity of mismatched negative pairs ($S_{ij}$ where $i \neq j$), this alignment strategy forces the model to learn modality-invariant representations. Consequently, semantically corresponding cross-modal features are pulled into compact joint clusters, significantly reducing the semantic gap and preparing the representations for downstream multimodal fusion.
+
+\subsection{Dynamic Adaptive Fusion}
+Conventional fusion strategies typically assign fixed contributions to individual modalities, which can be suboptimal since the reliability of acoustic and textual cues inherently varies across different utterances. To address this limitation, a dynamic adaptive fusion mechanism is introduced to automatically adjust the contribution of each modality based on the contextual characteristics of the input utterance.
+
+The proposed framework derives an utterance-level acoustic confidence score from the chunk-level importance metrics calculated during the audio representation learning stage. Specifically, for the $i$-th utterance, the overall reliability coefficient of the acoustic modality, $\lambda_i \in [0,1]$, is computed by averaging the chunk-level weights across all $M$ segments:
+\begin{equation}
+	\lambda_i = \frac{1}{M} \sum_{m=1}^{M} \gamma_i^{(m)}
+\end{equation}
+where $M$ denotes the total number of chunks within the utterance, and $\gamma_i^{(m)}$ represents the confidence-gated emotional saliency score of the $m$-th chunk. 
+
+The final multimodal classification decision is subsequently achieved through an adaptive late fusion of the modality-specific prediction logits:
+\begin{equation}
+	\mathbf{\ell}_i^{\text{final}} = \lambda_i \mathbf{\ell}_i^{\text{audio}} + (1 - \lambda_i) \mathbf{\ell}_i^{\text{text}}
+\end{equation}
+where $\mathbf{\ell}_i^{\text{audio}$ represents the weight-aggregated audio logits, and $\mathbf{\ell}_i^{\text{text}}$ represents the textual logits. Under this formulation, higher values of $\lambda_i$ dynamically scale up the contribution of the acoustic stream when the speech signal is deemed reliable, whereas lower values automatically shift the model's emphasis toward the textual modality.
+
+Unlike conventional gating mechanisms that learn an isolated, arbitrary fusion coefficient via extra parameter layers, the proposed strategy derives $\lambda_i$ intrinsically from the core chunk-level processing dynamics. Consequently, the multimodal information fusion process is directly governed by the fine-grained emotional saliency of individual speech regions, establishing a robust, hierarchical confidence framework that seamlessly links local segment relevance with global multi-source decision making.
+
+\subsection{Structured Supervised Contrastive Learning}
+To enforce an emotionally structured topology in the latent space, we introduce a Structured Supervised Contrastive Learning (SSCL) mechanism. Unlike standard Supervised Contrastive Learning (SupCon), which enforces a binary distinction between positive (same-class) and negative (different-class) pairs, the proposed SSCL architecture incorporates a continuous, class-aware soft similarity metric. This allows the model to treat cross-modal embedding relationships with fine-grained semantic sensitivity.
+
+Let $\mathbf{S} \in \mathbb{R}^{C \times C}$ denote a predefined, domain-specific emotion semantic similarity matrix, where $C$ represents the total number of target emotion classes. Each element $s_{ab} \in [0, 1]$ quantifies the prior psychological or semantic similarity between emotion class $a$ and emotion class $b$ (e.g., derived from valence-arousal distances or semantic proximity). 
+
+For a mini-batch of $N$ utterances where each utterance is partitioned into $M$ acoustic segments, the total pool of processed chunks evaluated by the contrastive loss is defined as $K = N \times M$. 
+
+Let $\mathbf{z}_i, \mathbf{z}_j \in \mathbb{R}^d$ represent the $L_2$-normalized embeddings of two distinct chunks within this combined pool, and let $y_i, y_j \in \{1, \dots, C\}$ denote their respective ground-truth emotion labels. The pairwise log-bilinear similarity score $r_{ij}$ between anchor chunk $i$ and contrastive target chunk $j$ is scaled by a temperature parameter $\tau$:
+\begin{equation}
+	r_{ij} = \frac{\mathbf{z}_i^{\top} \mathbf{z}_j}{\tau}
+\end{equation}
+
+For any pair of chunk samples $i$ and $j$, a continuous semantic scaling weight $w_{ij}$ is directly indexed from the prior emotion similarity matrix based on their class assignments:
+\begin{equation}
+	w_{ij} = s_{y_i, y_j}
+\end{equation}
+Consequently, samples belonging to closely related emotional profiles contribute more robustly to the gradient updates than pairs belonging to completely distant or orthogonal emotional categories.
+
+Because the semantic similarity matrix assign non-zero scalar weights across all class combinations, the traditional binary dichotomy of distinct "positive" and "negative" sets is generalized into a continuous spectrum. Every item in the batch pool interacts with the anchor simultaneously. The structured log-probability of target chunk $j$ relative to anchor chunk $i$ is formulated as:
+\begin{equation}
+	\log p_{ij} = r_{ij} - \log \sum_{k=1, k \neq i}^{K} \exp(r_{ik})
+\end{equation}
+
+The final proposed Structured Supervised Contrastive Loss ($\mathcal{L}_{\text{SSCL}}$) across the entire contrastive batch pool is optimized as the weighted expectation:
+\begin{equation}
+	\mathcal{L}_{\text{SSCL}} = -\frac{1}{K} \sum_{i=1}^{K} \frac{\sum_{j=1, j \neq i}^{K} w_{ij} \log p_{ij}}{\sum_{j=1, j \neq i}^{K} w_{ij}}
+\end{equation}
+By replacing discrete class masking with this soft, matrix-guided scaling, the optimization objective encourages semantically related emotional utterances to cluster closely together in a continuous geometric arrangement, significantly improving cross-modal discrimination and downstream feature alignment.
+
+\subsection{Joint Optimization Objective}
+The final stage of the proposed framework involves multi-task learning to simultaneously optimize classification accuracy, cross-modal alignment, and structural latent topology. After performing the dynamic adaptive fusion on the modality-specific prediction vectors, the final utterance-level emotion prediction is determined by applying an argmax operation over the fused logit vector $\mathbf{\ell}_i^{\text{final}}$. 
+
+To train the network, the classification loss $\mathcal{L}_{\text{cls}}$ is formulated using the standard Cross-Entropy loss over a mini-batch of size $N$:
+\begin{equation}
+	\mathcal{L}_{\text{cls}} = -\frac{1}{N} \sum_{i=1}^{N} \sum_{c=1}^{C} y_{i,c} \log \left( \text{softmax}(\mathbf{\ell}_i^{\text{final}})_c \right)
+\end{equation}
+where $y_{i,c}$ is a binary indicator indicating whether class label $c$ is the ground-truth classification for the $i$-th utterance, and $C$ represents the total number of emotion categories.
+
+To leverage the complementary advantages of feature-level alignment and structured semantic clustering, the overall network is optimized end-to-end using a joint objective function. The total loss $\mathcal{L}_{\text{total}}$ is defined as a weighted linear combination of the classification loss, the bidirectional cross-modal alignment loss, and the structured supervised contrastive loss:
+\begin{equation}
+	\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{cls}} + \lambda_{\text{align}} \mathcal{L}_{\text{align}} + \lambda_{\text{SSCL}} \mathcal{L_{\text{SSCL}}}
+\end{equation}
+
+where $\lambda_{\text{align}} > 0$ and $\lambda_{\text{SSCL}} > 0$ are regularizing hyperparameters that control the relative trade-offs and contributions of the cross-modal alignment and structured embedding objectives, respectively. By minimizing $\mathcal{L}_{\text{total}}$, the framework guarantees that the learned representations are concurrently discriminative for downstream classification, aligned across text and audio spaces, and topologically organized according to domain-specific emotional semantics.

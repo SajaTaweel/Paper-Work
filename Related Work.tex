@@ -1,0 +1,97 @@
+Emotion recognition has evolved significantly over recent years, progressing from traditional unimodal approaches toward more advanced multimodal and contrastive learning frameworks. Early research primarily focused on unimodal emotion recognition using either textual or acoustic information independently\cite{Cortiz2022, Batbaatar2019, Han2023, Mustaqeem2020, Venkataramanan2019, Novais2023, Atmaja2022, Yingzhi2021}. Although these approaches demonstrated promising performance, relying on a single modality often limits the model’s ability to capture the full emotional context. Consequently, later studies shifted toward multimodal frameworks that integrate complementary information from different modalities through various fusion strategies\cite{Koudounas2026, Chen2020, Chudasama2022, Dikbiyik2025, ISLAM2026, Kakuba2023, Krishna2020, KIM2026, PAYALA2026, Sebastian2019}. More recently, contrastive learning has emerged as an effective paradigm for improving multimodal representation learning by enhancing cross-modal alignment and increasing intra-class discriminability\cite{qian2022, Kim2023, Shi2024, Li2025, Jing2026, Nguyen2024}. Figure \ref{fig:RW-taxonomy} summarizes the main directions in emotion recognition research and highlights representative studies within each category.
+
+\begin{figure*}
+	\centering
+	\begin{tikzpicture}[
+		scale=1, 
+		transform shape, 
+		level 1/.style={sibling distance=6cm, level distance=2cm, text width=3.5cm}, 
+		level 2/.style={sibling distance=3.5cm, level distance=1.5cm, text width=3cm},
+		every node/.style={draw, align=center, rectangle, rounded corners, text centered, minimum height=1cm, inner sep = 12pt},
+		every child/.style={anchor=north},
+		edge from parent/.style={draw, thick, ->, >=stealth},
+		node distance=2.25cm,
+		text width=2.25cm,
+		text height= 0.01cm,
+		]
+		
+		
+		% define root %
+		\node[root][fill=gray!25!white, text width=5cm] {\textbf{Emotion Classification}}
+		% Level-1 children %
+		child {node[level-2][fill=green!25!white] (c1) {\textbf{Unimodal}}
+			child {node[fill=green!10!white, text width=2.25cm, text height = 0.01cm](c11) {\textbf{Speech-based \newline }}}
+			child {node[fill=green!10!white, text width=2.25cm, text height = 0.01cm](c12) {\textbf{Text-based} \\ \cite{Cortiz2022, Batbaatar2019, Han2023}}}
+		}
+		child {node[level-2][fill=pink!50!white] (c2) {\textbf{Multimodal}}}   
+		child {node[level-2][fill=cyan!25!white] (c3) {\textbf{Multimodal \& Contrastive Learning}}};
+		\begin{scope}
+			% For Category 1 children %
+			\node [below of = c11, xshift=15pt][fill=green!10!white] (c111) {\textbf{Handcrafted Features} \\ \cite{Mustaqeem2020, Venkataramanan2019, Novais2023}};
+			\node [below of = c111][fill=green!10!white] (c112) {\textbf{Learned Representations} \\ \cite{Atmaja2022, Yingzhi2021}};
+			% For Category 2 children %
+			\node [below of = c2, xshift=15pt][fill=pink!20!white] (c21) {\textbf{Feature Interaction} \\ \cite{Koudounas2026, Chen2020, Chudasama2022, Dikbiyik2025, ISLAM2026, Kakuba2023}};
+			\node [below of = c21][fill=pink!20!white] (c22) {\textbf{Attention-based}  \\ \cite{Krishna2020}};
+			\node [below of = c22][fill=pink!20!white] (c23) {\textbf{Knowledge Distillation} \\ \cite{KIM2026}};
+			\node [below of = c23][fill=pink!20!white] (c24) {\textbf{Ensemble-based} \\ \cite{PAYALA2026, Sebastian2019}};
+			
+			% For Category 3 children %
+			\node [below of = c3, xshift=15pt][fill=cyan!10!white] (c31) {\textbf{Cross-modal Alignment} \\ \cite{qian2022}};
+			\node [below of = c31][fill=cyan!10!white] (c32) {\textbf{Fusion-Integrated} \\ \cite{Shi2024, Li2025, Kim2023}};
+			\node [below of = c32][fill=cyan!10!white] (c33) {\textbf{Pretraining} \\ \cite{Jing2026, Nguyen2024}};
+			\node [below of = c33][fill=yellow!20!white] (c34) {\textbf{{Structured Cross-modal SupCL \\( \textsc{Daf-Cl})}}};
+			
+		\end{scope}
+		
+		
+		% Draw arrows from level-1 to it's children %
+		\foreach \value in {111, 112}
+		\draw[->] (c11.194) |- (c\value.west);
+		\foreach \value in {1,...,4}
+		\draw[->] (c2.194) |- (c2\value.west);
+		
+		\foreach \value in {1,...,4}
+		\draw[->] (c3.194) |- (c3\value.west);
+		
+	\end{tikzpicture}
+	\caption{Taxonomy of Emotion Recognition: From Unimodal to Multimodal Contrastive Learning.}
+	\label{fig:RW-taxonomy}
+\end{figure*}
+
+
+In text-based emotion recognition, transformer architectures have achieved strong performance in modeling contextual semantics and linguistic dependencies\cite{Cortiz2022}. However, semantic understanding alone is often insufficient for accurately capturing subtle emotional cues embedded within text. To address this limitation, several studies proposed ensemble-based approaches that separately learn semantic and emotional representations before combining them for final classification\cite{Batbaatar2019}. Building upon this idea, subsequent research introduced attention mechanisms to better emphasize emotionally relevant contextual information, leading to improved feature representation and classification performance\cite{Han2023}.
+
+For speech-based emotion recognition, early approaches mainly relied on handcrafted acoustic features due to their structured and interpretable nature. These features have been widely used in both traditional machine learning and deep learning frameworks. Some studies transformed handcrafted features into two-dimensional representations to exploit the representational capabilities of visual models\cite{Mustaqeem2020, Venkataramanan2019}, while others directly processed one-dimensional acoustic feature vectors using ensemble learning and conventional classification models\cite{Novais2023}. Despite their effectiveness, handcrafted features remain limited in their ability to capture high-level emotional representations.
+To overcome these limitations, recent research has increasingly adopted self-supervised learning (SSL) for speech representation learning. Instead of relying on manually designed acoustic descriptors, SSL models learn generalized and transferable representations directly from large-scale unlabeled speech data. Comparative studies have demonstrated the superiority of these learned representations over traditional handcrafted features across emotion recognition tasks\cite{Atmaja2022}. Furthermore, several works investigated different adaptation strategies, including full and partial fine-tuning, to better exploit pretrained speech representations for downstream emotional understanding\cite{Yingzhi2021}.
+
+The transition from unimodal to multimodal emotion recognition was primarily motivated by the limitation of relying on a single modality to capture the complete emotional context. Consequently, recent research has increasingly focused on integrating complementary information from multiple modalities, particularly speech and text, through different fusion strategies. Existing multimodal approaches can generally be categorized into feature interaction, attention-based fusion, knowledge distillation, and ensemble-based methods.
+
+A considerable portion of prior work focuses on feature interaction mechanisms, where modalities are jointly fused to enhance representation learning. Some studies emphasize one modality more than the other during the interaction process. For instance,\cite{Koudounas2026} refines textual representations using acoustic context, where audio information is utilized to disambiguate lexically neutral or ambiguous text through a multi-head attention fusion mechanism. In this framework, acoustic features serve as the keys and values, while textual representations form the query. Other approaches adopt a hybrid strategy by training independent models for each modality alongside an additional multimodal fusion model, followed by combining their predictions using ensemble learning\cite{Chen2020}. Furthermore, several studies incorporate intermediate fusion stages between modalities before the final classification layers to strengthen multimodal representation learning\cite{Chudasama2022, Dikbiyik2025}.
+
+Beyond speech and text, some studies extend multimodal emotion recognition by incorporating the visual modality \cite{Chudasama2022, ISLAM2026}. These approaches extract visual representations using deep visual feature extraction techniques and subsequently integrate them with speech and textual information. For example,\cite{ISLAM2026} combines multiple handcrafted acoustic features before performing multimodal fusion with visual representations. Similarly,\cite{Kakuba2023} demonstrates that directly learning from raw speech and textual inputs can outperform traditional handcrafted feature extraction pipelines. Their framework combines CNNs, BiLSTM networks, self-attention, and multi-head attention modules for each modality independently, while employing multi-stage fusion strategies at different representation levels. Specifically, the model first fuses convolutional representations, followed by fusion after the self-attention BiLSTM layers, before aggregating all representations using a transformer encoder for final emotion classification.
+
+Although attention mechanisms have been introduced in several multimodal frameworks, many studies still primarily rely on feature interaction as the core fusion philosophy. In contrast, attention-based approaches explicitly model the alignment between modalities through cross-modal attention mechanisms. For example,\cite{Krishna2020} employs cross-modal attention to enhance the interaction between textual and acoustic representations for emotion recognition. The framework utilizes 1D convolutional neural networks for feature extraction, while the cross-modal attention module enables the model to focus on emotionally salient information across modalities.
+
+Other research directions focus on improving multimodal representation learning through knowledge distillation strategies. In \cite{KIM2026}, a dual distillation framework is proposed that combines both self-distillation and cross-modal distillation for multimodal emotion recognition in conversational settings. The self-distillation module enhances intra-modal feature representations by transferring knowledge within the same modality, while the cross-modal distillation module aligns complementary emotional information between speech and text modalities, resulting in more robust and discriminative multimodal representations.
+
+In contrast to interaction-based methods, some approaches focus on combining independently learned predictions or representations from different modalities without performing deep cross-modal interaction during feature learning. These methods are generally categorized as ensemble-based fusion approaches \cite{PAYALA2026, Sebastian2019}. For instance,\cite{Sebastian2019} proposes an ensemble fusion framework optimized using the Aquila optimizer, where modalities are processed separately and their outputs are aggregated during the final decision stage. Similarly, \cite{PAYALA2026} independently learns audio and textual representations before combining their predictions for final emotion classification, without employing explicit cross-modal interaction mechanisms.
+
+With the rapid advancement of self-supervised and contrastive learning, recent studies have increasingly incorporated contrastive objectives into multimodal emotion recognition frameworks. Existing approaches can generally be categorized into three main directions: cross-modal alignment, fusion-integrated contrastive learning, and pretraining-based methods.
+
+Some studies focus primarily on aligning representations from different modalities through contrastive objectives, commonly referred to as cross-modal alignment methods. For example,\cite{qian2022} applies contrastive regularization between speech and text representations before multimodal fusion. In this framework, audio signals are first converted into Mel-spectrograms and processed using a CNN, while textual features are extracted using GloVe embeddings followed by an LSTM encoder. The learned representations are then passed through a discriminator that maximizes the similarity between paired audio-text embeddings while separating them from negative samples, thereby improving cross-modal representation consistency prior to fusion.
+
+Another line of research integrates discriminative objectives during or after multimodal fusion, which can be categorized as fusion-integrated contrastive learning. In\cite{Kim2023}, the framework first performs multimodal fusion using a crossmodal transformer with focus-attention, enabling speech and text representations to interact and exchange contextual information. The fused representation is subsequently refined using a metric learning objective that enhances the separation between emotional classes within the embedding space. Similarly,\cite{Shi2024} also applies a discriminative objective after multimodal fusion; however, the underlying learning objective differs from\cite{Kim2023}. While\cite{Kim2023} mainly employs metric learning to optimize embedding distances and improve the geometric structure of emotional representations,\cite{Shi2024} explicitly encourages intra-class compactness and inter-class separability by pulling samples from the same emotion class closer while pushing different emotional classes farther apart. Extending this direction,\cite{Li2025} proposes a multilayer interaction framework that progressively exchanges information across multimodal representations to improve emotional feature learning. Unlike methods that apply contrastive learning only after the final fusion stage, MIMCL tightly integrates contrastive objectives within intermediate interaction modules, enabling iterative refinement of multimodal representations and improving emotional discriminability across multiple feature levels.
+
+In contrast, other studies mainly employ contrastive learning during the pretraining stage to learn more generalized multimodal representations. For instance,\cite{Jing2026} introduces a contrastive language-audio pretraining framework for affective computing that aligns speech and textual representations using soft-target contrastive learning. Unlike conventional hard-label contrastive objectives, the proposed method leverages soft targets to capture nuanced emotional relationships between samples, resulting in more robust multimodal representations and improved downstream emotion recognition performance. Similarly,\cite{Nguyen2024} proposes a contrastive language-audio alignment framework that combines pretrained HuBERT speech representations with self-alignment learning to enhance emotional representation quality. Although multimodal contrastive learning is employed during pretraining, the downstream emotion recognition stage primarily relies on the enhanced speech representations, demonstrating the effectiveness of cross-modal pretraining for speech emotion understanding.
+
+Our research addresses an important gap in the existing literature by introducing a Dynamic Adaptive Fusion with Contrastive Learning (\textsc{Daf-Cl}) framework that jointly integrates dynamic cross-modal fusion and structured supervised contrastive learning within a unified optimization framework. The proposed approach aims to address several limitations that remain insufficiently explored in current emotion recognition methods. Although recent multimodal contrastive learning approaches have demonstrated promising performance, existing methods still struggle to effectively model semantic alignment, adaptive multimodal interaction, and discriminative emotional representation learning simultaneously.
+
+One major limitation of unimodal approaches is their restricted ability to capture complementary emotional information available across different modalities\cite{Cortiz2022, Batbaatar2019, Han2023, Mustaqeem2020, Venkataramanan2019, Novais2023, Atmaja2022, Yingzhi2021}. Consequently, multimodal emotion recognition has emerged as a promising direction; however, many existing multimodal frameworks still suffer from insufficient semantic alignment between heterogeneous modalities. For example, in\cite{Koudounas2026}, the framework primarily relies on textual representations while utilizing speech only to disambiguate lexically neutral or ambiguous text. Similarly, methods such as\cite{PAYALA2026, Dikbiyik2025} and\cite{ISLAM2026} mainly employ intermediate fusion strategies without explicitly ensuring optimal interaction and alignment between modalities.
+
+Moreover, several existing multimodal approaches rely on static fusion mechanisms, which may inadequately model the varying contribution and importance of modalities across different emotional contexts \cite{Chen2020, Dikbiyik2025}, and \cite{Sebastian2019}. In realistic conversational settings, the emotional significance of speech and text may dynamically vary across utterances, making static fusion strategies less effective for robust emotion understanding.
+
+Although contrastive learning has recently gained significant attention in multimodal emotion recognition, existing approaches often focus on either cross-modal alignment or class-level discrimination independently rather than jointly optimizing both objectives \cite{qian2022, Kim2023, Shi2024}. Furthermore, several studies apply contrastive objectives only after the final fusion stage, limiting progressive interaction refinement and multimodal representation learning throughout the network\cite{Kim2023, Shi2024, Li2025}. On the other hand, pretraining-based approaches improve representation quality during the alignment stage but often fail to fully exploit multimodal interaction during downstream emotion classification tasks \cite{Jing2026} and \cite{Nguyen2024}.
+
+Another important limitation lies in the generalization capability of existing methods. Many studies primarily evaluate their frameworks on a limited number of benchmark datasets, particularly IEMOCAP and RAVDESS, without extensively investigating model robustness across different speakers, domains, and data distributions\cite{Nguyen2024, Venkataramanan2019, Chen2020,Dikbiyik2025} and\cite{Krishna2020, KIM2026, Sebastian2019, qian2022, Kim2023, Shi2024, Li2025}. As a result, the real-world generalizability of these models remains insufficiently explored.
+
+To address these limitations, we propose the \textsc{Daf-Cl} framework, which combines dynamic adaptive multimodal fusion with structured supervised contrastive learning to jointly enhance cross-modal semantic alignment and emotional discriminability. The proposed framework is designed to enable more effective multimodal interaction, adaptive modality weighting, and improved generalization across diverse emotional contexts and data distributions, providing a scalable and robust solution for multimodal emotion recognition.
