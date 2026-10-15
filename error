@@ -1,0 +1,360 @@
+I reviewed both the **full mathematical description** and your **draw.io architecture**. The overall framework is strong and the diagram communicates the architecture well, but I would **not submit it yet** because there are a few important consistency issues between the manuscript, diagram, and the code you shared earlier.
+
+The good news is that the **overall architecture does not need redesigning**. Your main flow is correct: audio chunking → WavLM/layer aggregation → chunk-level decisions → audio aggregation; text → RoBERTa → text decision; separate audio–text alignment; SSCL on acoustic chunk representations; dynamic late fusion; joint loss. This matches the three components you introduce in the framework description. Pasted text
+
+The issues I would fix are:
+
+1. **Most important: your definition of \(\lambda_i\) does not match the implementation.**
+
+   In the paper and diagram, you currently define
+
+   \[
+   \gamma_i^{(m)}=\alpha_i^{(m)}c_i^{(m)}
+   \]
+
+   and then
+
+   \[
+   \lambda_i=\frac{1}{M}\sum_m\gamma_i^{(m)}.
+   \]
+
+   So the figure says that the **confidence-gated chunk importance** determines the final audio/text fusion weight. Your manuscript explicitly makes this claim. Pasted text
+
+   But in your actual code, the audio logits are aggregated using \(\alpha\times c\), while the final audio/text fusion coefficient is:
+
+   ```python
+   utt_alpha = torch.stack([a.mean(dim=0) for a in split_alpha], dim=0)
+   ```
+
+   followed by:
+
+   ```python
+   logits = utt_alpha * audio_logits + (1 - utt_alpha) * text_logits
+   ```
+
+   So the implemented fusion coefficient is actually
+
+   \[
+   \boxed{
+   \lambda_i =
+   \frac{1}{M_i}
+   \sum_{m=1}^{M_i}\alpha_i^{(m)}
+   }
+   \]
+
+   **not**
+
+   \[
+   \frac{1}{M_i}\sum_m\gamma_i^{(m)}.
+   \]
+
+   This is the biggest issue. Your diagram should therefore show:
+
+   **\(\alpha_m\) → average → \(\lambda_i\) → Dynamic Adaptive Fusion**
+
+   while
+
+   **\(\alpha_m\times c_m=\gamma_m\) → weighted audio-logit aggregation**
+
+   should be a separate path.
+
+   This distinction is scientifically important because confidence \(c_m\) affects **which chunks determine the audio prediction**, but does not directly determine the global audio-versus-text fusion coefficient in your current implementation.
+
+2. **Your confidence equation is also different from the code.**
+
+   The manuscript currently defines confidence as the maximum softmax probability:
+
+   \[
+   c_i^{(m)}
+   =
+   \max_k
+   \operatorname{softmax}(\ell_i^{(m)})_k.
+   \]
+
+   Pasted text
+
+   But your implementation calculates prediction entropy:
+
+   \[
+   H_i^{(m)}
+   =
+   -\sum_c p_c\log p_c
+   \]
+
+   and then uses approximately
+
+   \[
+   c_i^{(m)}
+   =
+   \frac{1}{H_i^{(m)}+\epsilon},
+   \]
+
+   followed by batch normalization by the mean confidence and clamping.
+
+   If the code you trained the reported model with is the final implementation, **change the manuscript and diagram to entropy-based confidence**. Do not keep maximum-softmax confidence in the paper.
+
+   Visually, I would make this part of your architecture:
+
+   **Chunk logits**
+   \[
+   \rightarrow \text{Softmax}
+   \rightarrow \text{Entropy}
+   \rightarrow c_i^{(m)}
+   \]
+
+   then combine it with:
+
+   \[
+   \alpha_i^{(m)}\times c_i^{(m)}
+   \rightarrow
+   \gamma_i^{(m)}.
+   \]
+
+3. **There is a double-sigmoid issue in the implementation.**
+
+   Your module already contains:
+
+   ```python
+   self.chunk_alpha = nn.Sequential(
+       nn.Linear(hidden_size, 1),
+       nn.Sigmoid()
+   )
+   ```
+
+   but later the forward pass applies:
+
+   ```python
+   chunk_alpha = torch.sigmoid(
+       self.chunk_alpha(pooled_chunks)
+   )
+   ```
+
+   So effectively you have
+
+   \[
+   \alpha
+   =
+   \sigma\left(
+   \sigma(Wz+b)
+   \right),
+   \]
+
+   rather than the single sigmoid written in the manuscript:
+
+   \[
+   \alpha_i^{(m)}
+   =
+   \sigma(W_a z_i^{(m)}+b_a).
+   \]
+
+   The paper's current single-sigmoid formulation is much more sensible. Pasted text
+
+   However, because your reported checkpoints were apparently trained using the double sigmoid, this is not something I would silently change in the paper without considering the trained model. Ideally, the implementation should contain **only one sigmoid**, followed by retraining. If you retain the existing checkpoint, then there is technically an implementation–method mismatch.
+
+4. **Your SSCL diagram is conceptually good, but the text contains one misleading statement.**
+
+   You write:
+
+   > “This allows the model to treat cross-modal embedding relationships…”
+
+   But SSCL does **not** operate cross-modally in your implementation. It operates on **audio chunk embeddings**. Cross-modal learning is handled separately by \(\mathcal L_{\text{align}}\).
+
+   Your own mathematical formulation later correctly defines SSCL using pairs of acoustic chunks. Pasted text
+
+   Change that sentence to something such as:
+
+   > “This allows the model to model relationships among acoustic chunk embeddings with fine-grained, class-aware semantic sensitivity.”
+
+   Similarly, the final SSCL sentence should not say it “significantly improves cross-modal discrimination and downstream feature alignment.” SSCL directly structures the **acoustic embedding space**; the cross-modal alignment loss is responsible for audio–text alignment.
+
+   Something safer is:
+
+   > “This objective encourages the acoustic embedding space to reflect graded inter-emotion relationships while improving discriminability among the target emotion categories.”
+
+5. **Your SSCL figure should explicitly show the projection head.**
+
+   Your SSCL diagram currently visually goes roughly:
+
+   **WavLM encoder → embeddings → \(L_2\) normalization → similarity**
+
+   But your implementation actually uses:
+
+   **chunk embedding**
+   \[
+   \rightarrow f_{\text{proj}}^{audio}
+   \rightarrow L_2\text{ normalization}
+   \rightarrow \text{SSCL}.
+   \]
+
+   This matters because SSCL is optimized on the **projected 256-D audio chunk embeddings**, not directly on the raw WavLM/Transformer representation.
+
+   I would add one small box:
+
+   **Audio Projection Head**
+
+   immediately before \(L_2\) normalization in the SSCL diagram.
+
+6. **\(K=N\times M\) should probably be changed.**
+
+   Your paper currently states:
+
+   \[
+   K=N\times M.
+   \]
+
+   Pasted text
+
+   But your utterances can have different lengths, so different utterances can contain different numbers of chunks. Therefore a more mathematically correct definition is:
+
+   \[
+   \boxed{
+   K=\sum_{i=1}^{N}M_i
+   }
+   \]
+
+   where \(M_i\) denotes the number of chunks generated from utterance \(i\).
+
+   Then use \(K=NM\) only as the special case where every utterance contains exactly \(M\) chunks.
+
+7. **There is an indexing error in the chunking equation.**
+
+   You define \(m\in\{1,\ldots,M\}\), but write:
+
+   \[
+   u_i^{(m)}
+   =
+   u_i[mL_h:mL_h+L_c].
+   \]
+
+   Pasted text
+
+   That would make chunk 1 start at \(L_h\), skipping the beginning of the utterance.
+
+   It should be:
+
+   \[
+   \boxed{
+   u_i^{(m)}
+   =
+   u_i[
+   (m-1)L_h:
+   (m-1)L_h+L_c
+   ]
+   }
+   \]
+
+   when \(m=1,\ldots,M\).
+
+8. **Small terminology correction: logits are not probabilities.**
+
+   You currently say:
+
+   > “\(\ell_i^{text}\in\mathbb R^C\) represents the class probabilities…”
+
+   But \(\ell_i^{text}\) is the output of the classification head **before softmax**, so it represents class logits/scores, not probabilities. Pasted text
+
+   Change it to:
+
+   > “\(\mathbf{\ell}_i^{\text{text}}\in\mathbb R^C\) denotes the text-specific emotion logits over the \(C\) target classes.”
+
+9. **Your cross-modal alignment is basically correct, but the temperature notation should be clearer.**
+
+   You currently write:
+
+   \[
+   S_{ij}
+   =
+   \tau
+   (\mathbf v_i^{audio})^\top
+   \mathbf v_j^{text}
+   \]
+
+   and call \(\tau\) a learnable temperature scaling parameter. Pasted text
+
+   Your code actually learns a **positive logit scale**:
+
+   ```python
+   logit_scale = self.logit_scale.exp()
+   sim = audio @ text.T * logit_scale
+   ```
+
+   initialized around \(1/0.07\).
+
+   So I would call it a **learnable logit scale** \(s\), not temperature:
+
+   \[
+   S_{ij}
+   =
+   s
+   (\mathbf v_i^{audio})^\top
+   \mathbf v_j^{text},
+   \qquad
+   s=\exp(\beta)>0.
+   \]
+
+   Alternatively, use the conventional temperature formulation:
+
+   \[
+   S_{ij}
+   =
+   \frac{
+   (\mathbf v_i^{audio})^\top
+   \mathbf v_j^{text}
+   }{\tau}.
+   \]
+
+   Either is fine, but the notation and implementation should say the same thing.
+
+### For your graph specifically
+
+The **visual structure is very good**. I would keep it. I would not redesign the whole figure.
+
+The one portion I would materially change is your **Confidence-Aware Reliability Assessment / Dynamic Adaptive Fusion connection**. It should visually communicate these two separate paths:
+
+```text
+                          ┌→ α_m ───────────────→ mean over chunks → λ_i
+Chunk embedding ─────────┤                                  │
+                          │                                  ↓
+                          │                         Dynamic audio/text fusion
+                          │
+                          └→ Audio Head → logits → entropy confidence c_m
+                                      │
+                              α_m × c_m = γ_m
+                                      │
+                                      ↓
+                          weighted audio-logit aggregation
+                                      │
+                                      ↓
+                              ℓ_i^audio
+```
+
+That would make the architecture match your actual computation much more precisely.
+
+For SSCL, I would show:
+
+```text
+Chunk embedding
+      ↓
+Audio Projection Head
+      ↓
+L2 Normalization
+      ↓
+Projected chunk embeddings
+      ↓
+Pairwise similarity R
+      ↘
+       Weighted SSCL Loss
+      ↗
+Emotion labels → 4×4 similarity matrix S → w_ij
+```
+
+### Overall verdict
+
+I would rate the **architecture/visual organization itself as very good**, and the SSCL diagram is especially clear. The major concern is **not your idea or architecture**; it is mathematical consistency between the text, figure, and implementation.
+
+The two things I would consider mandatory before submission are:
+
+**(1)** fix the \(c_m/\gamma_m/\lambda_i\) definitions so they match the trained code, and  
+**(2)** fix SSCL so it is described explicitly as an **audio chunk representation objective**, separate from cross-modal alignment.
+
+After those changes, the framework will read much more rigorously and will be significantly safer under reviewer scrutiny.
