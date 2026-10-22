@@ -1,0 +1,147 @@
+Yes — if you are keeping the **implementation**, then this manuscript part should be changed to match the entropy-based confidence exactly.
+
+Your code does **three things** after obtaining the chunk probabilities:
+
+1. computes entropy,
+2. converts it to inverse-entropy confidence,
+3. normalizes the confidence by the batch mean and clamps it.
+
+The code is:
+
+```python
+entropy = -(chunk_probs * torch.log(chunk_probs + 1e-9)).sum(dim=1, keepdim=True)
+chunk_conf = 1.0 / (entropy + 1e-9)
+
+chunk_conf = chunk_conf / (chunk_conf.mean() + 1e-9)
+chunk_conf = chunk_conf.clamp(min=0.1, max=10.0)
+```
+
+So your current maximum-softmax equation should be removed. Pasted text
+
+I would replace that whole paragraph with this:
+
+The model's local prediction confidence is estimated from the uncertainty of the chunk-level emotion distribution. First, the chunk logits are converted into class probabilities:
+\[
+\mathbf{p}_i^{(m)}
+=
+\operatorname{softmax}\left(\mathbf{\ell}_i^{(m)}\right).
+\]
+
+The predictive uncertainty of the \(m\)-th chunk is then quantified using Shannon entropy:
+\[
+H_i^{(m)}
+=
+-\sum_{c=1}^{C}
+p_{i,c}^{(m)}
+\log\left(p_{i,c}^{(m)}+\epsilon\right),
+\]
+where \(C\) denotes the number of emotion classes and \(\epsilon>0\) is a small constant introduced for numerical stability.
+
+An inverse-entropy confidence score is subsequently defined as:
+\[
+\widetilde{c}_i^{(m)}
+=
+\frac{1}{H_i^{(m)}+\epsilon}.
+\]
+
+Thus, chunks exhibiting a concentrated class-probability distribution receive higher confidence scores, whereas chunks with more uncertain predictions receive lower confidence. To stabilize the relative scale of the confidence values during optimization, the scores are normalized by the mean confidence of the processed chunk pool and constrained to a bounded range:
+\[
+c_i^{(m)}
+=
+\operatorname{clip}
+\left(
+\frac{\widetilde{c}_i^{(m)}}
+{\frac{1}{K}\sum_{j=1}^{K}\widetilde{c}_j},
+\,c_{\min},\,c_{\max}
+\right),
+\]
+where \(K\) denotes the total number of chunks in the mini-batch, and \(c_{\min}=0.1\) and \(c_{\max}=10.0\) correspond to the bounds used in the implementation.
+
+The final chunk importance weight is then obtained by combining the learned emotional saliency with the normalized predictive confidence:
+\[
+\gamma_i^{(m)}
+=
+\alpha_i^{(m)}c_i^{(m)}.
+\]
+
+This now matches the implementation much more closely. The code computes softmax probabilities, entropy, inverse entropy, mean normalization, and clipping before using the resulting confidence in the \(\alpha\times c\) audio-logit weighting. Pasted text
+
+### One notation detail I would change
+
+Because confidence normalization in the implementation happens across **all chunks currently processed in the batch**, it is cleaner to flatten the chunk index for that equation rather than write only \(i,m\). If you want the manuscript to stay simpler, the version above is fine, but you can also define the normalization as
+
+\[
+c_q
+=
+\operatorname{clip}
+\left(
+\frac{\widetilde c_q}
+{\frac{1}{K}\sum_{r=1}^{K}\widetilde c_r},
+0.1,10
+\right),
+\qquad q=1,\ldots,K.
+\]
+
+That mirrors the code most exactly.
+
+### Why entropy is better here than maximum probability
+
+I would also keep the implementation scientifically. Maximum softmax confidence considers essentially only the largest class probability, whereas entropy reflects the **entire predictive distribution**.
+
+For example:
+
+\[
+[0.60,0.39,0.005,0.005]
+\]
+
+and
+
+\[
+[0.60,0.15,0.15,0.10]
+\]
+
+both have maximum probability \(0.60\), but their uncertainty structures are different. Entropy can capture that distinction.
+
+So for your paper, the entropy-based version gives a more convincing interpretation of “prediction uncertainty.”
+
+### What to change in the diagram
+
+Where your diagram currently has something like:
+
+```text
+Softmax
+   ↓
+Max Probability
+   ↓
+Confidence c_m
+```
+
+change it to:
+
+```text
+Chunk logits ℓ_m
+      ↓
+    Softmax
+      ↓
+Class distribution p_m
+      ↓
+Prediction Entropy H_m
+      ↓
+Inverse Entropy 1/(H_m + ε)
+      ↓
+Normalize + Clamp
+      ↓
+Confidence c_m
+```
+
+Then:
+
+```text
+α_m × c_m
+   ↓
+γ_m
+```
+
+That is the exact conceptual path of your implementation.
+
+One more thing: I would **not call \(\gamma_m\) itself “confidence.”** Call \(c_m\) **predictive confidence**, \(\alpha_m\) **learned emotional saliency**, and \(\gamma_m\) **confidence-gated chunk importance weight**. That distinction will make the method much clearer to reviewers.
